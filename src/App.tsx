@@ -47,13 +47,22 @@ import {
   AlertTriangle,
   Settings,
   Cloud,
-  RefreshCw
+  RefreshCw,
+  ShieldAlert,
+  LogOut
 } from 'lucide-react';
+
+const ALLOWED_HOUSEHOLD_UIDS = [
+  'SgCGRzSiwEbRwl46rNzi8ciPIr02',
+  'ietPx6aZqNgkLfmVYYKTYWrvI9Y2',
+];
 
 export default function App() {
   // 1. Firebase Authentication state
   const [currentUser, setCurrentUser] = useState<User | null>(() => auth.currentUser);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+
+  const isAuthorized = Boolean(currentUser && ALLOWED_HOUSEHOLD_UIDS.includes(currentUser.uid));
 
   // Monitor Firebase Auth state changes
   useEffect(() => {
@@ -103,7 +112,7 @@ export default function App() {
 
   // Sync data with Cloud Database (Firebase Firestore)
   const syncWithDatabase = useCallback(async (quiet = false) => {
-    if (!currentUser) return;
+    if (!isAuthorized) return;
     try {
       if (!quiet) setIsSyncing(true);
       setSyncStatus('syncing');
@@ -134,11 +143,11 @@ export default function App() {
     } finally {
       if (!quiet) setIsSyncing(false);
     }
-  }, [currentUser]);
+  }, [isAuthorized]);
 
   // Real-time synchronization with Firestore across all cabin devices
   useEffect(() => {
-    if (!currentUser) return;
+    if (!isAuthorized) return;
 
     setSyncStatus('syncing');
 
@@ -172,7 +181,7 @@ export default function App() {
       unsubProducts();
       unsubShopping();
     };
-  }, [currentUser]);
+  }, [isAuthorized]);
 
   // Save to local cache on product changes
   useEffect(() => {
@@ -424,6 +433,43 @@ export default function App() {
   // If not authenticated, require Google Sign-In via Firebase Auth
   if (!currentUser) {
     return <LoginScreen onLoginSuccess={() => syncWithDatabase(true)} />;
+  }
+
+  // If authenticated but not one of the two authorized household members
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-amber-950/20 rounded-full blur-3xl pointer-events-none" />
+        
+        <div 
+          id="unauthorized-access-container"
+          className="w-full max-w-sm bg-stone-800/95 backdrop-blur-md border border-stone-700/80 rounded-2xl p-6 sm:p-8 text-center shadow-2xl relative z-10"
+        >
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center mx-auto mb-4 border border-amber-500/30">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <h2 className="text-xl font-bold text-white mb-2">Ej behörigt konto</h2>
+          <p className="text-stone-300 text-xs mb-3 leading-relaxed">
+            Inloggad som:
+            <span className="block font-semibold text-emerald-400 break-all mt-0.5">
+              {currentUser.email || currentUser.uid}
+            </span>
+          </p>
+          <p className="text-stone-400 text-xs mb-6 leading-relaxed">
+            Det här Google-kontot är inte auktoriserat för Björnstugans databas. Endast hushållets två godkända användare har läs- och skrivbehörighet.
+          </p>
+          <button
+            id="logout-unauthorized-btn"
+            type="button"
+            onClick={handleLogout}
+            className="w-full py-3 px-4 bg-stone-700 hover:bg-stone-600 active:bg-stone-500 text-white text-xs font-semibold rounded-xl flex items-center justify-center gap-2 transition cursor-pointer shadow-md"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Logga ut och byt konto</span>
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
