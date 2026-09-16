@@ -27,7 +27,9 @@ import {
   subscribeToProducts,
   subscribeToShoppingItems,
 } from './services/firestoreService';
-import { PasscodeLock } from './components/PasscodeLock';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import { auth } from './lib/firebase';
+import { LoginScreen } from './components/LoginScreen';
 import { TopBar } from './components/TopBar';
 import { BottomNavBar } from './components/BottomNavBar';
 import { CategoryCards } from './components/CategoryCards';
@@ -49,8 +51,24 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  // 1. Authentication
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => checkIsAuthenticated());
+  // 1. Firebase Authentication state
+  const [currentUser, setCurrentUser] = useState<User | null>(() => auth.currentUser);
+  const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+
+  // Monitor Firebase Auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      setIsAuthLoading(false);
+      if (user) {
+        setAuthenticated(true);
+      } else {
+        setAuthenticated(false);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // 2. Inventory Products & Database state
   const [products, setProducts] = useState<Product[]>(() => loadStoredProducts());
@@ -85,7 +103,7 @@ export default function App() {
 
   // Sync data with Cloud Database (Firebase Firestore)
   const syncWithDatabase = useCallback(async (quiet = false) => {
-    if (!isAuthenticated) return;
+    if (!currentUser) return;
     try {
       if (!quiet) setIsSyncing(true);
       setSyncStatus('syncing');
@@ -116,11 +134,11 @@ export default function App() {
     } finally {
       if (!quiet) setIsSyncing(false);
     }
-  }, [isAuthenticated]);
+  }, [currentUser]);
 
   // Real-time synchronization with Firestore across all cabin devices
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!currentUser) return;
 
     setSyncStatus('syncing');
 
@@ -154,7 +172,7 @@ export default function App() {
       unsubProducts();
       unsubShopping();
     };
-  }, [isAuthenticated]);
+  }, [currentUser]);
 
   // Save to local cache on product changes
   useEffect(() => {
@@ -166,14 +184,16 @@ export default function App() {
   }, [manualShoppingItems]);
 
   // Auth Handlers
-  const handleLoginSuccess = () => {
-    setAuthenticated(true);
-    setIsAuthenticated(true);
-  };
-
-  const handleLogout = () => {
-    setAuthenticated(false);
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentUser(null);
+      setAuthenticated(false);
+      showToast('Du har loggats ut från Björnstugan', 'info');
+    } catch (err: any) {
+      console.error('Logout error:', err);
+      showToast('Kunde inte logga ut', 'warning');
+    }
   };
 
   // Computed urgent notifications
@@ -389,9 +409,21 @@ export default function App() {
     showToast(`Importerade ${importedProducts.length} artiklar till molndatabasen`, 'success');
   };
 
-  // If not authenticated, show passcode screen
-  if (!isAuthenticated) {
-    return <PasscodeLock onSuccess={handleLoginSuccess} />;
+  // Check auth loading
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-stone-900 text-stone-100 flex flex-col items-center justify-center p-4">
+        <div className="w-14 h-14 rounded-2xl bg-emerald-800/40 border border-emerald-500/30 flex items-center justify-center text-3xl mb-3 animate-pulse shadow-lg shadow-emerald-950/40">
+          🐻
+        </div>
+        <p className="text-stone-400 text-xs tracking-wide">Laddar Björnstugan...</p>
+      </div>
+    );
+  }
+
+  // If not authenticated, require Google Sign-In via Firebase Auth
+  if (!currentUser) {
+    return <LoginScreen onLoginSuccess={() => syncWithDatabase(true)} />;
   }
 
   return (
@@ -422,6 +454,8 @@ export default function App() {
         onLogout={handleLogout}
         urgentExpiryCount={urgentExpiryCount}
         shoppingListCount={shoppingListCount}
+        userEmail={currentUser.email}
+        userPhoto={currentUser.photoURL}
       />
 
       {/* Cloud Sync Status Banner */}

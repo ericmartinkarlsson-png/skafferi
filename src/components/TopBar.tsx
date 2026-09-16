@@ -23,6 +23,8 @@ interface TopBarProps {
   onLogout: () => void;
   urgentExpiryCount: number;
   shoppingListCount: number;
+  userEmail?: string | null;
+  userPhoto?: string | null;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -36,6 +38,8 @@ export const TopBar: React.FC<TopBarProps> = ({
   onLogout,
   urgentExpiryCount,
   shoppingListCount,
+  userEmail,
+  userPhoto,
 }) => {
   return (
     <header className="sticky top-0 z-40 bg-stone-900 text-stone-100 border-b border-stone-800 shadow-md">
@@ -133,16 +137,35 @@ export const TopBar: React.FC<TopBarProps> = ({
             <span className="text-xs font-semibold hidden md:inline">Skanna</span>
           </button>
 
-          {/* Logout button */}
-          <button
-            id="logout-btn"
-            type="button"
-            onClick={onLogout}
-            className="p-2 text-stone-400 hover:text-rose-400 hover:bg-stone-800/80 rounded-xl transition cursor-pointer"
-            title="Lås / Logga ut"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+          {/* User profile & Logout */}
+          <div className="flex items-center gap-1.5 pl-1 border-l border-stone-800">
+            {userPhoto ? (
+              <img
+                src={userPhoto}
+                alt="Profil"
+                className="w-7 h-7 rounded-full border border-emerald-500/40 object-cover"
+                referrerPolicy="no-referrer"
+              />
+            ) : userEmail ? (
+              <div 
+                className="w-7 h-7 rounded-full bg-emerald-900/80 border border-emerald-500/40 text-emerald-200 text-xs font-bold flex items-center justify-center"
+                title={userEmail}
+              >
+                {userEmail.charAt(0).toUpperCase()}
+              </div>
+            ) : null}
+
+            <button
+              id="logout-btn"
+              type="button"
+              onClick={onLogout}
+              className="p-1.5 sm:px-2.5 sm:py-1.5 text-stone-400 hover:text-rose-400 hover:bg-stone-800/90 rounded-xl transition cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+              title="Logga ut från Firebase"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Logga ut</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>
