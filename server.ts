@@ -19,7 +19,29 @@ async function startServer() {
 
   app.use(express.json());
 
+  // CORS middleware for AI Studio preview, iframes, and cross-origin clients
+  app.use((req, res, next) => {
+    const origin = req.headers.origin || '*';
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, HEAD, PUT, PATCH, POST, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-cabin-passcode, X-Cabin-Passcode');
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    next();
+  });
+
+  // Request logger for APIs
+  app.use((req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      console.log(`[API ${req.method}] ${req.path}`);
+    }
+    next();
+  });
+
   // Health check
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });

@@ -7,101 +7,97 @@ const HEADERS = {
   'Authorization': `Bearer ${encodeURIComponent(AUTH_PASSCODE)}`,
 };
 
+async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Response> {
+  const mergedHeaders: Record<string, string> = {
+    ...HEADERS,
+    ...(options.headers as Record<string, string> || {}),
+  };
+
+  const res = await fetch(endpoint, {
+    ...options,
+    headers: mergedHeaders,
+    credentials: 'include',
+  });
+
+  if (!res.ok) {
+    let errorDetail = `HTTP ${res.status}`;
+    try {
+      const errorJson = await res.json();
+      if (errorJson?.error) {
+        errorDetail = errorJson.error;
+      }
+    } catch {
+      try {
+        const text = await res.text();
+        if (text && text.length < 120 && !text.includes('<!DOCTYPE')) {
+          errorDetail = text;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(errorDetail);
+  }
+
+  return res;
+}
 
 export async function fetchProductsApi(): Promise<Product[]> {
-  const res = await fetch('/api/products', {
-    headers: HEADERS,
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
+  const res = await apiFetch('/api/products');
   return await res.json();
 }
 
 export async function saveProductApi(product: Omit<Product, 'updatedAt'>): Promise<Product> {
-  const res = await fetch('/api/products', {
+  const res = await apiFetch('/api/products', {
     method: 'POST',
-    headers: HEADERS,
     body: JSON.stringify(product),
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
   return await res.json();
 }
 
 export async function deleteProductApi(id: string): Promise<void> {
-  const res = await fetch(`/api/products/${encodeURIComponent(id)}`, {
+  await apiFetch(`/api/products/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: HEADERS,
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
 }
 
 export async function adjustQuantityApi(id: string, delta: number): Promise<Product> {
-  const res = await fetch(`/api/products/${encodeURIComponent(id)}/quantity`, {
+  const res = await apiFetch(`/api/products/${encodeURIComponent(id)}/quantity`, {
     method: 'PATCH',
-    headers: HEADERS,
     body: JSON.stringify({ delta }),
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
   return await res.json();
 }
 
 export async function fetchManualShoppingApi(): Promise<ShoppingItem[]> {
-  const res = await fetch('/api/shopping/manual', {
-    headers: HEADERS,
-  });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
+  const res = await apiFetch('/api/shopping/manual');
   return await res.json();
 }
 
 export async function saveManualShoppingApi(item: ShoppingItem): Promise<void> {
-  const res = await fetch('/api/shopping/manual', {
+  await apiFetch('/api/shopping/manual', {
     method: 'POST',
-    headers: HEADERS,
     body: JSON.stringify(item),
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
 }
 
 export async function deleteManualShoppingApi(id: string): Promise<void> {
-  const res = await fetch(`/api/shopping/manual/${encodeURIComponent(id)}`, {
+  await apiFetch(`/api/shopping/manual/${encodeURIComponent(id)}`, {
     method: 'DELETE',
-    headers: HEADERS,
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
 }
 
 export async function restockFromShoppingApi(items: { productId: string; addQty: number }[]): Promise<void> {
-  const res = await fetch('/api/shopping/restock', {
+  await apiFetch('/api/shopping/restock', {
     method: 'POST',
-    headers: HEADERS,
     body: JSON.stringify({ items }),
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
 }
 
 export async function resetDatabaseApi(): Promise<Product[]> {
-  const res = await fetch('/api/database/reset', {
+  const res = await apiFetch('/api/database/reset', {
     method: 'POST',
-    headers: HEADERS,
   });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-  }
   const data = await res.json();
   return data.products;
 }

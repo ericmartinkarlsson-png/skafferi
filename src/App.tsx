@@ -100,13 +100,20 @@ export default function App() {
       saveManualShoppingItems(dbShopping);
 
       setSyncStatus('synced');
-    } catch (err) {
+      if (!quiet) {
+        showToast('Ansluten till molnet! Alla artiklar är synkade.', 'success');
+      }
+    } catch (err: any) {
       console.warn('Sync failed, using offline cache:', err);
       setSyncStatus('offline');
+      if (!quiet) {
+        showToast(`Kunde inte ansluta till molnet (${err?.message || 'Nätverksfel'}). Sparad lokalt.`, 'warning');
+      }
     } finally {
       if (!quiet) setIsSyncing(false);
     }
   }, [isAuthenticated]);
+
 
   // Initial load and periodic background sync for multi-device collaboration
   useEffect(() => {
