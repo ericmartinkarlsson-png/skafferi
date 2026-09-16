@@ -17,8 +17,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   shoppingListCount,
 }) => {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-stone-900/95 backdrop-blur-md border-t border-stone-800 pb-safe">
-      <div className="max-w-md mx-auto px-2 py-1.5 flex items-center justify-around">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-stone-900/95 backdrop-blur-md border-t border-stone-800 pb-safe pb-3.5 pt-1.5 shadow-[0_-4px_20px_rgba(0,0,0,0.4)]">
+      <div className="max-w-md mx-auto px-3 flex items-center justify-around">
+
         {/* 1. Kategorier (Front Page) */}
         <button
           id="nav-categories-btn"

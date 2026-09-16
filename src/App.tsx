@@ -238,10 +238,10 @@ export default function App() {
       setSyncStatus('syncing');
       await deleteProductApi(productId);
       setSyncStatus('synced');
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to delete from cloud database:', err);
       setSyncStatus('offline');
-      showToast('Kunde inte ta bort artikeln från molnet (sparad lokalt)', 'warning');
+      showToast(`Kunde inte ta bort artikeln från molnet (${err?.message || 'Nätverksfel'}). Sparad lokalt.`, 'warning');
     }
   };
 
@@ -266,8 +266,9 @@ export default function App() {
     setProductToEdit(null);
     setIsScannerOpen(false);
     setIsProductModalOpen(true);
-    showToast(`Ny streckkod identifierad: ${barcode}. Fyll i artikelnamn.`, 'info');
+    showToast(`Streckkod ${barcode} sparad! Fyll i artikelnamn och saldo.`, 'info');
   };
+
 
   // Shopping list actions
   const handleAddManualShoppingItem = async (
@@ -356,7 +357,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-stone-100 text-stone-900 pb-20 sm:pb-16 flex flex-col antialiased">
+    <div className="min-h-screen bg-stone-100 text-stone-900 pb-32 sm:pb-28 flex flex-col antialiased">
+
       {/* Top Header with Mode Switcher & Quick Actions */}
       <TopBar
         currentCategory={selectedCategory}
@@ -385,26 +387,40 @@ export default function App() {
       />
 
       {/* Cloud Sync Status Banner */}
-      <div className="bg-stone-800 text-stone-300 text-[11px] px-4 py-1 flex items-center justify-between border-b border-stone-700/60 max-w-4xl mx-auto w-full">
+      <div className="bg-stone-800 text-stone-300 text-[11px] px-4 py-1.5 flex items-center justify-between border-b border-stone-700/60 max-w-4xl mx-auto w-full">
         <div className="flex items-center gap-1.5">
-          <Cloud className={`w-3.5 h-3.5 ${syncStatus === 'synced' ? 'text-emerald-400' : syncStatus === 'syncing' ? 'text-amber-400 animate-pulse' : 'text-stone-400'}`} />
+          <Cloud className={`w-3.5 h-3.5 ${syncStatus === 'synced' ? 'text-emerald-400' : syncStatus === 'syncing' ? 'text-amber-400 animate-pulse' : 'text-amber-400'}`} />
           <span>
-            {syncStatus === 'synced' && 'Synkad med molnet (alla enheter)'}
-            {syncStatus === 'syncing' && 'Synkroniserar ändringar...'}
-            {syncStatus === 'offline' && 'Offlineläge (sparar lokalt)'}
+            {syncStatus === 'synced' && 'Molndatabas: Synkad med alla enheter'}
+            {syncStatus === 'syncing' && 'Synkroniserar ändringar med molnet...'}
+            {syncStatus === 'offline' && 'Offlineläge (sparar lokalt i webbläsaren)'}
           </span>
         </div>
-        <button
-          id="manual-sync-btn"
-          type="button"
-          onClick={() => syncWithDatabase()}
-          className="text-stone-400 hover:text-emerald-400 transition cursor-pointer flex items-center gap-1"
-          title="Synka nu"
-        >
-          <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
-          <span>Uppdatera</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {syncStatus === 'offline' && (
+            <button
+              id="reconnect-cloud-btn"
+              type="button"
+              onClick={() => syncWithDatabase()}
+              className="text-emerald-400 hover:text-emerald-300 font-bold bg-stone-700/80 hover:bg-stone-700 px-2 py-0.5 rounded transition cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+              <span>Återanslut moln</span>
+            </button>
+          )}
+          <button
+            id="manual-sync-btn"
+            type="button"
+            onClick={() => syncWithDatabase()}
+            className="text-stone-400 hover:text-emerald-400 transition cursor-pointer flex items-center gap-1"
+            title="Synka nu"
+          >
+            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+            <span>Synka</span>
+          </button>
+        </div>
       </div>
+
 
       {/* Floating Toast Notification */}
       {toastMessage && (

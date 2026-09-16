@@ -9,18 +9,24 @@ export interface AuthRequest extends Request {
 const PASSCODE = 'Björnstugan1337';
 
 function isPasscodeValid(headerVal: unknown): boolean {
-  if (typeof headerVal !== 'string') return false;
-  if (headerVal === PASSCODE || headerVal === 'BjÃ¶rnstugan1337') {
+  if (!headerVal || typeof headerVal !== 'string') return false;
+  const str = headerVal.trim();
+  if (str === PASSCODE || str === 'BjÃ¶rnstugan1337' || str === encodeURIComponent(PASSCODE)) {
     return true;
   }
   try {
-    if (decodeURIComponent(headerVal) === PASSCODE) return true;
+    if (decodeURIComponent(str) === PASSCODE) return true;
   } catch {
     // ignore
   }
   try {
-    const fromLatin1 = Buffer.from(headerVal, 'latin1').toString('utf8');
+    const fromLatin1 = Buffer.from(str, 'latin1').toString('utf8');
     if (fromLatin1 === PASSCODE) return true;
+  } catch {
+    // ignore
+  }
+  try {
+    if (str.normalize('NFC') === PASSCODE.normalize('NFC')) return true;
   } catch {
     // ignore
   }
@@ -41,17 +47,25 @@ export const requireCabinAuth = async (
     return next();
   }
 
-  // Option 2: Firebase Bearer token
+  // Option 2: Bearer token is passcode
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split('Bearer ')[1];
-    try {
-      const decodedToken = await adminAuth.verifyIdToken(token);
-      req.user = decodedToken;
+    const token = authHeader.split('Bearer ')[1]?.trim();
+    if (isPasscodeValid(token)) {
+      req.user = { uid: 'cabin-user', email: 'cabin@bjornstugan.local' };
       return next();
-    } catch (err) {
-      console.warn('Firebase token verification failed:', err);
+    }
+    // Option 3: Firebase Bearer token if configured
+    try {
+      if (adminAuth && adminAuth.verifyIdToken) {
+        const decodedToken = await adminAuth.verifyIdToken(token);
+        req.user = decodedToken;
+        return next();
+      }
+    } catch {
+      // ignore
     }
   }
 
   return res.status(401).json({ error: 'Obehörig: Ogiltig lösenkod eller session.' });
 };
+

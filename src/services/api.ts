@@ -4,7 +4,9 @@ import { AUTH_PASSCODE } from './storage.ts';
 const HEADERS = {
   'Content-Type': 'application/json',
   'x-cabin-passcode': encodeURIComponent(AUTH_PASSCODE),
+  'Authorization': `Bearer ${encodeURIComponent(AUTH_PASSCODE)}`,
 };
+
 
 export async function fetchProductsApi(): Promise<Product[]> {
   const res = await fetch('/api/products', {

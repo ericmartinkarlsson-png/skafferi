@@ -17,3 +17,27 @@
   animation: scanline 2.2s ease-in-out infinite;
 }
 
+/* Suppress Netlify floating badges, drawers, and overlays that obstruct action buttons */
+[data-netlify-badge],
+.netlify-badge,
+#netlify-badge,
+a[href*="netlify.com"],
+div[class*="netlify-identity"],
+div[class*="netlify-drawer"],
+div[id*="netlify-drawer"],
+iframe[src*="netlify"],
+[aria-label*="Netlify" i],
+[title*="Netlify" i] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  z-index: -99999 !important;
+  bottom: -9999px !important;
+  right: -9999px !important;
+}
+
+
