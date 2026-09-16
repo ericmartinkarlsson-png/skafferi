@@ -15,16 +15,18 @@ import {
   resetInventoryToDefaults
 } from './services/storage';
 import {
-  fetchProductsApi,
-  saveProductApi,
-  deleteProductApi,
-  adjustQuantityApi,
-  fetchManualShoppingApi,
-  saveManualShoppingApi,
-  deleteManualShoppingApi,
-  restockFromShoppingApi,
-  resetDatabaseApi,
-} from './services/api';
+  fetchProductsFromFirestore,
+  saveProductToFirestore,
+  deleteProductFromFirestore,
+  adjustProductQuantityInFirestore,
+  fetchShoppingItemsFromFirestore,
+  saveShoppingItemToFirestore,
+  deleteShoppingItemFromFirestore,
+  restockFromShoppingInFirestore,
+  seedInitialProducts,
+  subscribeToProducts,
+  subscribeToShoppingItems,
+} from './services/firestoreService';
 import { PasscodeLock } from './components/PasscodeLock';
 import { TopBar } from './components/TopBar';
 import { BottomNavBar } from './components/BottomNavBar';
@@ -81,7 +83,7 @@ export default function App() {
     }, 2800);
   };
 
-  // Sync data with Cloud Database
+  // Sync data with Cloud Database (Firebase Firestore)
   const syncWithDatabase = useCallback(async (quiet = false) => {
     if (!isAuthenticated) return;
     try {
@@ -89,19 +91,21 @@ export default function App() {
       setSyncStatus('syncing');
 
       const [dbProducts, dbShopping] = await Promise.all([
-        fetchProductsApi(),
-        fetchManualShoppingApi(),
+        fetchProductsFromFirestore(),
+        fetchShoppingItemsFromFirestore(),
       ]);
 
-      setProducts(dbProducts);
-      saveStoredProducts(dbProducts);
+      if (dbProducts.length > 0) {
+        setProducts(dbProducts);
+        saveStoredProducts(dbProducts);
+      }
 
       setManualShoppingItems(dbShopping);
       saveManualShoppingItems(dbShopping);
 
       setSyncStatus('synced');
       if (!quiet) {
-        showToast('Ansluten till molnet! Alla artiklar är synkade.', 'success');
+        showToast('Molnsynk aktiv! Alla artiklar är synkade med Firebase.', 'success');
       }
     } catch (err: any) {
       console.warn('Sync failed, using offline cache:', err);
@@ -114,17 +118,43 @@ export default function App() {
     }
   }, [isAuthenticated]);
 
-
-  // Initial load and periodic background sync for multi-device collaboration
+  // Real-time synchronization with Firestore across all cabin devices
   useEffect(() => {
-    if (isAuthenticated) {
-      syncWithDatabase();
-      const interval = setInterval(() => {
-        syncWithDatabase(true);
-      }, 20000); // 20s background sync
-      return () => clearInterval(interval);
-    }
-  }, [isAuthenticated, syncWithDatabase]);
+    if (!isAuthenticated) return;
+
+    setSyncStatus('syncing');
+
+    const unsubProducts = subscribeToProducts(
+      (remoteProducts) => {
+        if (remoteProducts && remoteProducts.length > 0) {
+          setProducts(remoteProducts);
+          saveStoredProducts(remoteProducts);
+        }
+        setSyncStatus('synced');
+      },
+      (err) => {
+        console.warn('Products sync listener warning:', err);
+        setSyncStatus('offline');
+      }
+    );
+
+    const unsubShopping = subscribeToShoppingItems(
+      (remoteShopping) => {
+        if (remoteShopping) {
+          setManualShoppingItems(remoteShopping);
+          saveManualShoppingItems(remoteShopping);
+        }
+      },
+      (err) => {
+        console.warn('Shopping sync listener warning:', err);
+      }
+    );
+
+    return () => {
+      unsubProducts();
+      unsubShopping();
+    };
+  }, [isAuthenticated]);
 
   // Save to local cache on product changes
   useEffect(() => {
@@ -189,11 +219,11 @@ export default function App() {
       })
     );
 
-    // Sync to Cloud SQL database
+    // Sync to Firestore cloud database
     try {
-      await adjustQuantityApi(productId, delta);
+      await adjustProductQuantityInFirestore(productId, delta);
     } catch (err) {
-      console.error('Failed to sync quantity to cloud:', err);
+      console.error('Failed to sync quantity to Firestore:', err);
     }
   };
 
@@ -220,11 +250,11 @@ export default function App() {
       showToast(`Lade till ${fullProduct.name} i ${fullProduct.category}`, 'success');
     }
 
-    // Sync to Cloud SQL database
+    // Sync to Firestore cloud database
     try {
-      await saveProductApi(fullProduct);
+      await saveProductToFirestore(fullProduct);
     } catch (err) {
-      console.error('Failed to save to cloud database:', err);
+      console.error('Failed to save to Firestore database:', err);
     }
   };
 
@@ -243,10 +273,10 @@ export default function App() {
 
     try {
       setSyncStatus('syncing');
-      await deleteProductApi(productId);
+      await deleteProductFromFirestore(productId);
       setSyncStatus('synced');
     } catch (err: any) {
-      console.error('Failed to delete from cloud database:', err);
+      console.error('Failed to delete from Firestore database:', err);
       setSyncStatus('offline');
       showToast(`Kunde inte ta bort artikeln från molnet (${err?.message || 'Nätverksfel'}). Sparad lokalt.`, 'warning');
     }
@@ -291,18 +321,18 @@ export default function App() {
     showToast(`Lade till "${newItem.name}" på inköpslistan`, 'info');
 
     try {
-      await saveManualShoppingApi(newItem);
+      await saveShoppingItemToFirestore(newItem);
     } catch (err) {
-      console.error('Failed to sync manual shopping item:', err);
+      console.error('Failed to sync manual shopping item to Firestore:', err);
     }
   };
 
   const handleRemoveManualShoppingItem = async (id: string) => {
     setManualShoppingItems((prev) => prev.filter((i) => i.id !== id));
     try {
-      await deleteManualShoppingApi(id);
+      await deleteShoppingItemFromFirestore(id);
     } catch (err) {
-      console.error('Failed to delete manual shopping item:', err);
+      console.error('Failed to delete manual shopping item from Firestore:', err);
     }
   };
 
@@ -325,17 +355,18 @@ export default function App() {
     showToast(`Fyllde på ${restockedItems.length} artiklar i lagret! 🎉`, 'success');
 
     try {
-      await restockFromShoppingApi(restockedItems);
+      await restockFromShoppingInFirestore(restockedItems);
     } catch (err) {
-      console.error('Failed to restock in cloud database:', err);
+      console.error('Failed to restock in Firestore database:', err);
     }
   };
 
   // Reset database to defaults
   const handleResetData = async () => {
     try {
-      const resetProducts = await resetDatabaseApi();
-      setProducts(resetProducts);
+      await seedInitialProducts();
+      const freshProducts = await fetchProductsFromFirestore();
+      setProducts(freshProducts);
       setManualShoppingItems([]);
       showToast('Återställde databasen till Björnstugans standardartiklar', 'info');
     } catch (err) {
@@ -350,7 +381,7 @@ export default function App() {
     setProducts(importedProducts);
     for (const prod of importedProducts) {
       try {
-        await saveProductApi(prod);
+        await saveProductToFirestore(prod);
       } catch (err) {
         // Continue with rest
       }
@@ -398,9 +429,9 @@ export default function App() {
         <div className="flex items-center gap-1.5">
           <Cloud className={`w-3.5 h-3.5 ${syncStatus === 'synced' ? 'text-emerald-400' : syncStatus === 'syncing' ? 'text-amber-400 animate-pulse' : 'text-amber-400'}`} />
           <span>
-            {syncStatus === 'synced' && 'Molndatabas: Synkad med alla enheter'}
-            {syncStatus === 'syncing' && 'Synkroniserar ändringar med molnet...'}
-            {syncStatus === 'offline' && 'Offlineläge (sparar lokalt i webbläsaren)'}
+            {syncStatus === 'synced' && 'Molndatabas: Synkad i realtid (Firebase Firestore)'}
+            {syncStatus === 'syncing' && 'Synkroniserar ändringar med Firebase...'}
+            {syncStatus === 'offline' && 'Offlineläge (sparar lokalt och synkar automatiskt)'}
           </span>
         </div>
         <div className="flex items-center gap-2">

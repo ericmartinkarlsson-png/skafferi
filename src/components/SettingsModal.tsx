@@ -85,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
         <div className="p-5 space-y-4 text-xs">
           <p className="text-stone-600 leading-relaxed">
-            All data sparas lokalt i enhetens webbläsardatabas (localStorage). Du kan exportera en säkerhetskopia eller återställa standarddata för Björnstugan.
+            All data synkas automatiskt i realtid via <strong>Google Firebase Firestore</strong> till alla stuggäster och enheter (fungerar även på Netlify och mobiler), och sparas dessutom lokalt i webbläsaren för full offline-funktionalitet.
           </p>
 
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 flex justify-between items-center">

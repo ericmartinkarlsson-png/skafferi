@@ -20,7 +20,12 @@ async function apiFetch(endpoint: string, options: RequestInit = {}): Promise<Re
   });
 
   if (!res.ok) {
+    if (res.status === 404 && typeof window !== 'undefined' && window.location.hostname.includes('netlify')) {
+      throw new Error('Netlify körs utan Node/PostgreSQL-backend. Firebase Firestore behövs för att synka på Netlify.');
+    }
+
     let errorDetail = `HTTP ${res.status}`;
+
     try {
       const errorJson = await res.json();
       if (errorJson?.error) {
