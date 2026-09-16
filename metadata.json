@@ -1,0 +1,6 @@
+{
+  "name": "Björnstugan Skafferi & Lager",
+  "description": "Smart lagerhantering med streckkodsläsare, utgångsdatumvarningar och automatisk inköpslista för Björnstugan.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
