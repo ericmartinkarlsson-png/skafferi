@@ -15,6 +15,9 @@ export interface Product {
   expirationDate: string; // YYYY-MM-DD
   minQuantity: number;
   barcode?: string;
+  brand?: string;
+  packageSize?: string;
+  imageUrl?: string;
   locationDetails?: string;
   notes?: string;
   updatedAt: string;

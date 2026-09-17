@@ -278,53 +278,76 @@ export const ProductList: React.FC<ProductListProps> = ({
                 }`}
               >
                 {/* Left side: Product Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between sm:justify-start gap-2 mb-1">
-                    <h4 
-                      onClick={() => onEditProduct(product)}
-                      className="font-bold text-stone-900 text-sm sm:text-base tracking-tight hover:text-emerald-700 transition cursor-pointer truncate"
-                      title={product.name}
-                    >
-                      {product.name}
-                    </h4>
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  {product.imageUrl && (
+                    <img
+                      src={product.imageUrl}
+                      alt={product.name}
+                      referrerPolicy="no-referrer"
+                      className="w-11 h-11 object-contain bg-stone-50 rounded-xl border border-stone-200 p-0.5 shrink-0"
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between sm:justify-start gap-2 mb-1">
+                      <div className="flex items-baseline gap-1.5 truncate">
+                        <h4 
+                          onClick={() => onEditProduct(product)}
+                          className="font-bold text-stone-900 text-sm sm:text-base tracking-tight hover:text-emerald-700 transition cursor-pointer truncate"
+                          title={product.name}
+                        >
+                          {product.name}
+                        </h4>
+                        {product.brand && (
+                          <span className="text-xs text-stone-500 font-medium shrink-0">
+                            • {product.brand}
+                          </span>
+                        )}
+                      </div>
 
-                    {/* Expiry Badge */}
-                    {product.expirationDate && (
-                      <span
-                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 flex items-center gap-1 ${expiry.badgeClass}`}
-                      >
-                        {expiry.status === 'expired' && <AlertCircle className="w-3 h-3 text-rose-600" />}
-                        {expiry.status === 'urgent' && <AlertTriangle className="w-3 h-3 text-amber-600" />}
-                        <span>{expiry.label}</span>
+                      {/* Expiry Badge */}
+                      {product.expirationDate && (
+                        <span
+                          className={`text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0 flex items-center gap-1 ${expiry.badgeClass}`}
+                        >
+                          {expiry.status === 'expired' && <AlertCircle className="w-3 h-3 text-rose-600" />}
+                          {expiry.status === 'urgent' && <AlertTriangle className="w-3 h-3 text-amber-600" />}
+                          <span>{expiry.label}</span>
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Metadata Row (Location, barcode, min level, packageSize) */}
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-stone-500">
+                      <span className="capitalize font-medium text-stone-600">
+                        {product.category}
                       </span>
-                    )}
-                  </div>
 
-                  {/* Metadata Row (Location, barcode, min level) */}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
-                    <span className="capitalize font-medium text-stone-600">
-                      {product.category}
-                    </span>
+                      {product.packageSize && (
+                        <span className="text-[11px] text-stone-600 bg-stone-100 px-1.5 py-0.5 rounded font-medium">
+                          {product.packageSize}
+                        </span>
+                      )}
 
-                    {product.locationDetails && (
-                      <span className="flex items-center gap-0.5">
-                        <MapPin className="w-3 h-3 text-stone-400" />
-                        <span>{product.locationDetails}</span>
-                      </span>
-                    )}
+                      {product.locationDetails && (
+                        <span className="flex items-center gap-0.5">
+                          <MapPin className="w-3 h-3 text-stone-400" />
+                          <span>{product.locationDetails}</span>
+                        </span>
+                      )}
 
-                    {product.barcode && (
-                      <span className="flex items-center gap-0.5 font-mono text-[11px] text-stone-400">
-                        <Barcode className="w-3 h-3" />
-                        <span>{product.barcode.slice(-5)}</span>
-                      </span>
-                    )}
+                      {product.barcode && (
+                        <span className="flex items-center gap-0.5 font-mono text-[11px] text-stone-400">
+                          <Barcode className="w-3 h-3" />
+                          <span>{product.barcode.slice(-5)}</span>
+                        </span>
+                      )}
 
-                    {isLowStock && (
-                      <span className="text-amber-700 font-medium bg-amber-100/70 px-1.5 py-0.2 rounded text-[11px]">
-                        Miniminivå: {product.minQuantity} {product.unit}
-                      </span>
-                    )}
+                      {isLowStock && (
+                        <span className="text-amber-700 font-medium bg-amber-100/70 px-1.5 py-0.2 rounded text-[11px]">
+                          Min: {product.minQuantity} {product.unit}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
 

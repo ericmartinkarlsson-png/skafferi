@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, Calendar, Hash, Barcode, MapPin, Tag } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Hash, Barcode, MapPin, Tag, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { Product, CategoryId, ProductUnit } from '../types';
 import { getDateWithOffset } from '../utils/dateUtils';
 
@@ -11,6 +11,7 @@ interface ProductModalProps {
   initialCategory: CategoryId;
   productToEdit?: Product | null;
   prefilledBarcode?: string;
+  prefilledProduct?: Partial<Product> | null;
 }
 
 const UNITS: { value: ProductUnit; label: string }[] = [
@@ -34,6 +35,7 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   initialCategory,
   productToEdit,
   prefilledBarcode,
+  prefilledProduct,
 }) => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState<CategoryId>(initialCategory);
@@ -42,6 +44,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
   const [expirationDate, setExpirationDate] = useState('');
   const [minQuantity, setMinQuantity] = useState(1);
   const [barcode, setBarcode] = useState('');
+  const [brand, setBrand] = useState('');
+  const [packageSize, setPackageSize] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [locationDetails, setLocationDetails] = useState('');
   const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -57,8 +62,24 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setExpirationDate(productToEdit.expirationDate || '');
       setMinQuantity(productToEdit.minQuantity ?? 1);
       setBarcode(productToEdit.barcode || '');
+      setBrand(productToEdit.brand || '');
+      setPackageSize(productToEdit.packageSize || '');
+      setImageUrl(productToEdit.imageUrl || '');
       setLocationDetails(productToEdit.locationDetails || '');
       setNotes(productToEdit.notes || '');
+    } else if (prefilledProduct) {
+      setName(prefilledProduct.name || '');
+      setCategory(prefilledProduct.category || initialCategory);
+      setQuantity(prefilledProduct.quantity ?? 1);
+      setUnit(prefilledProduct.unit || 'st');
+      setExpirationDate(prefilledProduct.expirationDate || '');
+      setMinQuantity(prefilledProduct.minQuantity ?? 1);
+      setBarcode(prefilledProduct.barcode || prefilledBarcode || '');
+      setBrand(prefilledProduct.brand || '');
+      setPackageSize(prefilledProduct.packageSize || '');
+      setImageUrl(prefilledProduct.imageUrl || '');
+      setLocationDetails(prefilledProduct.locationDetails || '');
+      setNotes(prefilledProduct.notes || '');
     } else {
       setName('');
       setCategory(initialCategory);
@@ -67,11 +88,14 @@ export const ProductModal: React.FC<ProductModalProps> = ({
       setExpirationDate('');
       setMinQuantity(1);
       setBarcode(prefilledBarcode || '');
+      setBrand('');
+      setPackageSize('');
+      setImageUrl('');
       setLocationDetails('');
       setNotes('');
     }
     setErrors({});
-  }, [productToEdit, initialCategory, prefilledBarcode, isOpen]);
+  }, [productToEdit, initialCategory, prefilledBarcode, prefilledProduct, isOpen]);
 
   if (!isOpen) return null;
 
@@ -101,6 +125,9 @@ export const ProductModal: React.FC<ProductModalProps> = ({
         expirationDate: expirationDate.trim(),
         minQuantity: Number(minQuantity),
         barcode: barcode.trim() || undefined,
+        brand: brand.trim() || undefined,
+        packageSize: packageSize.trim() || undefined,
+        imageUrl: imageUrl.trim() || undefined,
         locationDetails: locationDetails.trim() || undefined,
         notes: notes.trim() || undefined,
       },
@@ -146,6 +173,39 @@ export const ProductModal: React.FC<ProductModalProps> = ({
 
         {/* Form Body */}
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto space-y-4 text-stone-800 text-sm">
+          {/* Image & Auto-fill Info Preview if available */}
+          {imageUrl && (
+            <div className="p-3 bg-emerald-50/70 border border-emerald-200/80 rounded-xl flex items-center gap-3">
+              <img
+                src={imageUrl}
+                alt={name || 'Produktbild'}
+                referrerPolicy="no-referrer"
+                className="w-14 h-14 object-contain rounded-lg bg-white border border-stone-200 shrink-0"
+                onError={(e) => {
+                  // If image fails to load, gracefully hide without breaking
+                  (e.target as HTMLElement).style.display = 'none';
+                }}
+              />
+              <div className="flex-1 min-w-0 text-xs">
+                <div className="flex items-center gap-1.5 text-emerald-800 font-semibold mb-0.5">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  <span>Information hämtad automatiskt</span>
+                </div>
+                <p className="text-stone-600 truncate">
+                  {brand ? `${brand} • ` : ''}{packageSize || 'Produktbild från Open Food Facts'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setImageUrl('')}
+                className="text-[11px] text-stone-400 hover:text-stone-600 p-1 rounded hover:bg-stone-100 transition"
+                title="Ta bort bild"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* Name */}
           <div>
             <label className="block text-xs font-semibold text-stone-700 mb-1" htmlFor="product-name-input">
@@ -166,6 +226,43 @@ export const ProductModal: React.FC<ProductModalProps> = ({
               autoFocus
             />
             {errors.name && <p className="text-rose-600 text-xs mt-1">{errors.name}</p>}
+          </div>
+
+          {/* Brand & Package Size */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1" htmlFor="product-brand-input">
+                <span className="flex items-center gap-1">
+                  <Tag className="w-3.5 h-3.5 text-stone-500" />
+                  Varumärke
+                </span>
+              </label>
+              <input
+                id="product-brand-input"
+                type="text"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="T.ex. OLW, Arla, Findus..."
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-900 text-xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1" htmlFor="product-package-size-input">
+                <span className="flex items-center gap-1">
+                  <Hash className="w-3.5 h-3.5 text-stone-500" />
+                  Mängd / Storlek
+                </span>
+              </label>
+              <input
+                id="product-package-size-input"
+                type="text"
+                value={packageSize}
+                onChange={(e) => setPackageSize(e.target.value)}
+                placeholder="T.ex. 275 g, 1.5 l, 6-pack..."
+                className="w-full px-3 py-2 bg-stone-50 border border-stone-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-stone-900 text-xs"
+              />
+            </div>
           </div>
 
           {/* Category */}

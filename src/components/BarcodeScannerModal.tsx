@@ -11,9 +11,11 @@ import {
   Search, 
   PackagePlus,
   RefreshCw,
-  ExternalLink
+  ExternalLink,
+  Sparkles
 } from 'lucide-react';
 import { Product, AppMode } from '../types';
+import { lookupOpenFoodFacts } from '../services/openFoodFactsService';
 
 interface BarcodeScannerModalProps {
   isOpen: boolean;
@@ -21,7 +23,7 @@ interface BarcodeScannerModalProps {
   products: Product[];
   currentMode: AppMode;
   onProductScanned: (product: Product, action: 'increment' | 'decrement' | 'select') => void;
-  onUnknownBarcodeScanned: (barcode: string) => void;
+  onUnknownBarcodeScanned: (barcode: string, prefilledData?: Partial<Product> | null) => void;
 }
 
 export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
@@ -35,6 +37,8 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [manualCode, setManualCode] = useState('');
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isSearchingExternal, setIsSearchingExternal] = useState(false);
+  const [searchingBarcode, setSearchingBarcode] = useState('');
   const [detectedUnknownBarcode, setDetectedUnknownBarcode] = useState<string | null>(null);
   const [detectedProduct, setDetectedProduct] = useState<Product | null>(null);
   const [lastScannedMessage, setLastScannedMessage] = useState<{
@@ -45,6 +49,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isProcessingRef = useRef<boolean>(false);
   const isMountedRef = useRef<boolean>(false);
+  const lastScannedBarcodeRef = useRef<{ code: string; time: number }>({ code: '', time: 0 });
   const scannerContainerId = 'qr-reader-container';
 
   // Play subtle feedback audio beep safely
@@ -91,11 +96,23 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const handleBarcodeDetected = async (decodedText: string) => {
     const cleanCode = decodedText.trim();
     if (!cleanCode || isProcessingRef.current) return;
+
+    // Cooldown/debounce: prevent duplicate calls if the same barcode stays in front of camera
+    const now = Date.now();
+    if (
+      lastScannedBarcodeRef.current.code === cleanCode &&
+      now - lastScannedBarcodeRef.current.time < 3000
+    ) {
+      return;
+    }
+    lastScannedBarcodeRef.current = { code: cleanCode, time: now };
     isProcessingRef.current = true;
 
     playBeep();
 
-    // Look for matching product
+    // 1. Sök alltid i vår egen Firestore-data först.
+    // Om samma streckkod redan finns på en produkt i Björnstugan ska den befintliga
+    // produktinformationen användas direkt. Gör då inget externt anrop till Open Food Facts.
     const matched = products.find(
       (p) => p.barcode && p.barcode.trim().toLowerCase() === cleanCode.toLowerCase()
     );
@@ -126,16 +143,78 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
         await stopScannerSafely();
         setDetectedProduct(matched);
       }
-    } else {
-      // Unknown barcode detected! Pause camera and display clean registration prompt
-      await stopScannerSafely();
-      setDetectedUnknownBarcode(cleanCode);
+      return;
+    }
+
+    // 2. Streckkoden finns inte i Firestore.
+    // Gör ett produktuppslag mot Open Food Facts API med den skannade EAN-koden.
+    await stopScannerSafely();
+    setIsSearchingExternal(true);
+    setSearchingBarcode(cleanCode);
+
+    try {
+      const offProduct = await lookupOpenFoodFacts(cleanCode);
+      if (!isMountedRef.current) return;
+
+      setIsSearchingExternal(false);
+
+      if (offProduct) {
+        // 3. Open Food Facts hittade produkten:
+        // Förifyll formuläret med namn, varumärke, storlek, kategori, bild, enhet & streckkod
+        onUnknownBarcodeScanned(cleanCode, {
+          name: offProduct.name,
+          brand: offProduct.brand,
+          packageSize: offProduct.packageSize,
+          category: offProduct.category,
+          imageUrl: offProduct.imageUrl,
+          unit: offProduct.suggestedUnit || 'st',
+          barcode: cleanCode,
+        });
+      } else {
+        // 4. Open Food Facts hittade inte produkten eller nätverksfel:
+        // Öppna manuellt formulär med streckkoden redan ifylld.
+        onUnknownBarcodeScanned(cleanCode, null);
+      }
+    } catch (err) {
+      console.warn('Open Food Facts lookup error:', err);
+      if (isMountedRef.current) {
+        setIsSearchingExternal(false);
+        onUnknownBarcodeScanned(cleanCode, null);
+      }
+    } finally {
+      isProcessingRef.current = false;
     }
   };
 
   const handleRegisterNewProduct = async (code: string) => {
     await stopScannerSafely();
-    onUnknownBarcodeScanned(code);
+    setIsSearchingExternal(true);
+    setSearchingBarcode(code);
+
+    try {
+      const offProduct = await lookupOpenFoodFacts(code);
+      if (!isMountedRef.current) return;
+      setIsSearchingExternal(false);
+
+      if (offProduct) {
+        onUnknownBarcodeScanned(code, {
+          name: offProduct.name,
+          brand: offProduct.brand,
+          packageSize: offProduct.packageSize,
+          category: offProduct.category,
+          imageUrl: offProduct.imageUrl,
+          unit: offProduct.suggestedUnit || 'st',
+          barcode: code,
+        });
+      } else {
+        onUnknownBarcodeScanned(code, null);
+      }
+    } catch {
+      if (isMountedRef.current) {
+        setIsSearchingExternal(false);
+        onUnknownBarcodeScanned(code, null);
+      }
+    }
   };
 
   const handleOpenExistingProduct = async (product: Product) => {
@@ -287,8 +366,39 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
           </button>
         </div>
 
-        {/* View 1: When an unknown barcode has been detected, prompt user to register new product */}
-        {detectedUnknownBarcode ? (
+        {/* View 0: When searching Open Food Facts */}
+        {isSearchingExternal ? (
+          <div className="p-6 bg-stone-900 flex flex-col items-center text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner">
+              <RefreshCw className="w-7 h-7 animate-spin text-emerald-400" />
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-xs uppercase font-bold tracking-wider text-emerald-400 bg-emerald-950/80 px-2.5 py-1 rounded-full border border-emerald-800">
+                Open Food Facts
+              </span>
+              <h3 className="text-base font-bold text-white pt-1">
+                Söker artikelinformation...
+              </h3>
+              <p className="text-stone-400 text-xs max-w-xs">
+                Letar efter produktnamn, varumärke och bild för kod <span className="font-mono text-emerald-300">{searchingBarcode}</span>.
+              </p>
+            </div>
+
+            <div className="w-full pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSearchingExternal(false);
+                  onUnknownBarcodeScanned(searchingBarcode, null);
+                }}
+                className="text-xs text-stone-400 hover:text-stone-200 underline cursor-pointer py-1"
+              >
+                Hoppa över och fyll i manuellt
+              </button>
+            </div>
+          </div>
+        ) : detectedUnknownBarcode ? (
           <div className="p-5 bg-stone-900 flex flex-col items-center text-center space-y-4">
             <div className="w-14 h-14 rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-inner">
               <PackagePlus className="w-7 h-7" />
@@ -471,23 +581,35 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
                       key={p.id}
                       id={`test-scan-btn-${p.id}`}
                       type="button"
+                      title="Testa befintlig vara i lagret (Firestore, inget API-anrop)"
                       onClick={() => {
                         if (p.barcode) handleBarcodeDetected(p.barcode);
                       }}
                       className="px-2 py-1 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-[11px] text-stone-200 transition cursor-pointer flex items-center gap-1"
                     >
                       <Barcode className="w-3 h-3 text-emerald-400" />
-                      <span>{p.name.split(' ')[0]}</span>
+                      <span>{p.name.split(' ')[0]} (i lager)</span>
                     </button>
                   ))}
                   <button
+                    id="test-scan-olw-btn"
+                    type="button"
+                    title="Testa Open Food Facts uppslag: OLW Grillchips 275g"
+                    onClick={() => handleBarcodeDetected('7310532109315')}
+                    className="px-2 py-1 bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-700/80 rounded text-[11px] text-emerald-300 transition cursor-pointer flex items-center gap-1 font-medium"
+                  >
+                    <Sparkles className="w-3 h-3 text-emerald-400" />
+                    <span>OLW Chips (Open Food Facts)</span>
+                  </button>
+                  <button
                     id="test-scan-unknown-btn"
                     type="button"
-                    onClick={() => handleBarcodeDetected(`73${Math.floor(10000000000 + Math.random() * 90000000000)}`)}
-                    className="px-2 py-1 bg-emerald-950/70 hover:bg-emerald-900 border border-emerald-700/60 rounded text-[11px] text-emerald-300 transition cursor-pointer flex items-center gap-1 font-semibold"
+                    title="Testa okänd streckkod som ej finns i Open Food Facts (manuell registrering)"
+                    onClick={() => handleBarcodeDetected('7399999999999')}
+                    className="px-2 py-1 bg-stone-800 hover:bg-stone-700 border border-stone-700 rounded text-[11px] text-stone-300 transition cursor-pointer flex items-center gap-1"
                   >
-                    <Plus className="w-3 h-3 text-emerald-400" />
-                    <span>Testa ny kod</span>
+                    <Plus className="w-3 h-3 text-stone-400" />
+                    <span>Okänd kod (Manuell)</span>
                   </button>
                 </div>
               </div>

@@ -97,6 +97,7 @@ export default function App() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const [prefilledBarcode, setPrefilledBarcode] = useState<string | undefined>(undefined);
+  const [prefilledProductData, setPrefilledProductData] = useState<Partial<Product> | null>(null);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -327,12 +328,21 @@ export default function App() {
     }
   };
 
-  const handleUnknownBarcodeScanned = (barcode: string) => {
+  const handleUnknownBarcodeScanned = (
+    barcode: string,
+    externalData?: Partial<Product> | null
+  ) => {
     setPrefilledBarcode(barcode);
+    setPrefilledProductData(externalData || null);
     setProductToEdit(null);
     setIsScannerOpen(false);
     setIsProductModalOpen(true);
-    showToast(`Streckkod ${barcode} sparad! Fyll i artikelnamn och saldo.`, 'info');
+
+    if (externalData?.name) {
+      showToast(`Hämtade produktinfo för "${externalData.name}". Granska och spara.`, 'success');
+    } else {
+      showToast('Produkten hittades inte automatiskt. Fyll i informationen manuellt.', 'info');
+    }
   };
 
 
@@ -773,12 +783,14 @@ export default function App() {
           setIsProductModalOpen(false);
           setProductToEdit(null);
           setPrefilledBarcode(undefined);
+          setPrefilledProductData(null);
         }}
         onSave={handleSaveProduct}
         onDelete={handleDeleteProduct}
         initialCategory={selectedCategory === 'all' ? 'skafferi' : selectedCategory}
         productToEdit={productToEdit}
         prefilledBarcode={prefilledBarcode}
+        prefilledProduct={prefilledProductData}
       />
 
       {/* Barcode Scanner Modal */}
